@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maze Game</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Segoe UI', sans-serif; color: #eee; }
+  h1 { margin-bottom: 8px; font-size: 1.6rem; color: #e94560; }
+  #info { margin-bottom: 12px; font-size: 0.9rem; color: #aaa; }
+  canvas { border: 2px solid #e94560; border-radius: 4px; background: #16213e; }
+  #status { margin-top: 12px; font-size: 1.1rem; min-height: 1.4em; }
+  #controls { margin-top: 10px; font-size: 0.8rem; color: #666; }
+</style>
+</head>
+<body>
+<h1>Maze Game</h1>
+<div id="info">Level: <span id="level">1</span> | Moves: <span id="moves">0</span></div>
+<canvas id="c"></canvas>
+<div id="status"></div>
+<div id="controls">Arrow keys or WASD to move | R to restart | N for new maze</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const levelEl = document.getElementById('level');
+const movesEl = document.getElementById('moves');
+
+let cols, rows, cellSize = 28, maze, playerX, playerY, moveCount, level = 1, won = false;
+
+function initLevel() {
+  cols = 10 + level * 2;
+  rows = 10 + level * 2;
+  if (cols > 30) cols = 30;
+  if (rows > 30) rows = 30;
+  canvas.width = cols * cellSize;
+  canvas.height = rows * cellSize;
+  maze = generateMaze(cols, rows);
+  playerX = 0; playerY = 0;
+  moveCount = 0; won = false;
+  movesEl.textContent = 0;
+  levelEl.textContent = level;
+  statusEl.textContent = '';
+  draw();
+}
+
+function generateMaze(w, h) {
+  // Each cell: { top, right, bottom, left, visited }
+  const grid = [];
+  for (let y = 0; y < h; y++) {
+    grid[y] = [];
+    for (let x = 0; x < w; x++) {
+      grid[y][x] = { top: true, right: true, bottom: true, left: true, visited: false };
+    }
+  }
+  const stack = [];
+  let cx = 0, cy = 0;
+  grid[cy][cx].visited = true;
+  let visitedCount = 1;
+  const total = w * h;
+
+  while (visitedCount < total) {
+    const neighbors = [];
+    if (cy > 0 && !grid[cy-1][cx].visited) neighbors.push([cx, cy-1, 'top', 'bottom']);
+    if (cx < w-1 && !grid[cy][cx+1].visited) neighbors.push([cx+1, cy, 'right', 'left']);
+    if (cy < h-1 && !grid[cy+1][cx].visited) neighbors.push([cx, cy+1, 'bottom', 'top']);
+    if (cx > 0 && !grid[cy][cx-1].visited) neighbors.push([cx-1, cy, 'left', 'right']);
+
+    if (neighbors.length > 0) {
+      const [nx, ny, wall, opposite] = neighbors[Math.floor(Math.random() * neighbors.length)];
+      stack.push([cx, cy]);
+      grid[cy][cx][wall] = false;
+      grid[ny][nx][opposite] = false;
+      cx = nx; cy = ny;
+      grid[cy][cx].visited = true;
+      visitedCount++;
+    } else {
+      [cx, cy] = stack.pop();
+    }
+  }
+  return grid;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const s = cellSize;
+
+  // Draw exit
+  ctx.fillStyle = '#0f3460';
+  ctx.fillRect((cols-1)*s, (rows-1)*s, s, s);
+  ctx.fillStyle = '#e94560';
+  ctx.font = `${s * 0.6}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('★', (cols-1)*s + s/2, (rows-1)*s + s/2);
+
+  // Draw walls
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = 2;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = maze[y][x];
+      const px = x * s, py = y * s;
+      if (cell.top)    { ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px+s, py); ctx.stroke(); }
+      if (cell.right)  { ctx.beginPath(); ctx.moveTo(px+s, py); ctx.lineTo(px+s, py+s); ctx.stroke(); }
+      if (cell.bottom) { ctx.beginPath(); ctx.moveTo(px, py+s); ctx.lineTo(px+s, py+s); ctx.stroke(); }
+      if (cell.left)   { ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py+s); ctx.stroke(); }
+    }
+  }
+
+  // Draw player
+  ctx.fillStyle = '#e94560';
+  ctx.beginPath();
+  ctx.arc(playerX * s + s/2, playerY * s + s/2, s * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function tryMove(dx, dy) {
+  if (won) return;
+  const cell = maze[playerY][playerX];
+  if (dx === 0 && dy === -1 && cell.top) return;
+  if (dx === 1 && dy === 0 && cell.right) return;
+  if (dx === 0 && dy === 1 && cell.bottom) return;
+  if (dx === -1 && dy === 0 && cell.left) return;
+
+  playerX += dx;
+  playerY += dy;
+  moveCount++;
+  movesEl.textContent = moveCount;
+
+  if (playerX === cols - 1 && playerY === rows - 1) {
+    won = true;
+    statusEl.textContent = `🎉 You solved it in ${moveCount} moves! Press N for next level.`;
+  }
+  draw();
+}
+
+document.addEventListener('keydown', e => {
+  switch(e.key) {
+    case 'ArrowUp': case 'w': case 'W': e.preventDefault(); tryMove(0, -1); break;
+    case 'ArrowDown': case 's': case 'S': e.preventDefault(); tryMove(0, 1); break;
+    case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); tryMove(-1, 0); break;
+    case 'ArrowRight': case 'd': case 'D': e.preventDefault(); tryMove(1, 0); break;
+    case 'r': case 'R': initLevel(); break;
+    case 'n': case 'N': if (won) level++; initLevel(); break;
+  }
+});
+
+initLevel();
+</script>
+</body>
+</html>
